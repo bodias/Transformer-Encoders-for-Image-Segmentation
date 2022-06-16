@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 
 from PIL import Image
-from tqdm import tqdm
-from urllib.request import urlretrieve
+from imgutils import separate_blobs
 
 
 class BrightfieldDataset(torch.utils.data.Dataset):
@@ -32,31 +31,30 @@ class BrightfieldDataset(torch.utils.data.Dataset):
         image_path = os.path.join(self.images_directory, image_filename[image_filename.rfind("/")+1:])
         mask_path = os.path.join(self.masks_directory, mask_filename[mask_filename.rfind("/")+1:])
 
-        image = Image.open(image_path).resize((256, 256), Image.LINEAR)
-        mask = Image.open(mask_path).resize((256, 256), Image.LINEAR)
+        image = Image.open(image_path)#.resize((256, 256), Image.LINEAR)
+        mask = Image.open(mask_path)#.resize((256, 256), Image.LINEAR)
 
-        image = np.array(image)
-        mask = np.array(mask)
-        mask = self._preprocess_mask(mask)
+        image = np.array(image, dtype=np.uint16)
+        mask = np.array(mask, dtype=np.uint16)
+        mask = self._preprocess_mask(mask)        
         
+        sample = dict(image=image, mask=mask)
+        if self.transform is not None:
+            sample = self.transform(**sample)
+
         # convert to other format HWC -> CHW
-        image = np.moveaxis(image, -1, 0)
+        image = np.moveaxis(sample['image'], -1, 0)
         image = np.expand_dims(image, 0)    
-        mask = np.expand_dims(mask, 0)        
-        
-        # if self.transform is not None:
-        #     image = self.transform(image)
-        #     mask  = self.transform(mask)
+        mask = np.expand_dims(sample['mask'], 0)       
 
-        sample = dict(image=image, mask=mask)    
-
-        return sample
+        return dict(image=image.astype(np.float32), mask=mask.astype(np.float32))
 
     @staticmethod
     def _preprocess_mask(mask):     
-        mask = mask.astype(np.float32)
+        # mask = mask.astype(np.float32)
         # make all cell classes being represented by the same class (1) and background is 0
-        mask[mask>0] = 1.0
+        # separate_blobs(mask)
+        mask[mask>0] = 1
         
         return mask
 
